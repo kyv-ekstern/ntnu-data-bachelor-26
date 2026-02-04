@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  postgres:
+    build:
+        dockerfile: ./db/postgres.Dockerfile
+    container_name: ntnu-ais-anomalies-psql
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: birdsarentreal
+      POSTGRES_DB: ais
+    ports:
+      - "5439:5432"
+    volumes:
+      # For Postgres 18+, mount at /var/lib/postgresql (not /var/lib/postgresql/data)
+      - ntnu_ais_postgres_data:/var/lib/postgresql
+      # Run init scripts (e.g., enabling PostGIS) on first initialization
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  db-migration:
+    build:
+      context: ./db
+      dockerfile: Dockerfile
+    container_name: ntnu-ais-anomalies-migration
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: birdsarentreal
+      DB_NAME: ais
+
+  db-seeder:
+    build:
+      context: ./db
+      dockerfile: Dockerfile
+    container_name: ntnu-ais-anomalies-seeder
+    depends_on:
+      db-migration:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: birdsarentreal
+      DB_NAME: ais
+    command: ["/db-migration", "-seed"]
+    profiles:
+      - seed
+
+volumes:
+  ntnu_ais_postgres_data:

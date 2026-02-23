@@ -73,6 +73,24 @@ services:
     profiles:
       - reseed
 
+  db-geojson-seeder:
+    build:
+      context: ./db
+      dockerfile: Dockerfile
+    container_name: ntnu-ais-anomalies-geojson-seeder
+    depends_on:
+      db-migration:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: birdsarentreal
+      DB_NAME: ais
+    command: ["/db-migration", "-geojson-seed", "-reseed", "-anomaly-limit", "${ANOMALY_LIMIT:-50000}"]
+    profiles:
+      - geojson-seed
+
   ais-anomaly-api:
     build:
       context: ./ais-anomaly-api

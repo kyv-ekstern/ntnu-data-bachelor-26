@@ -12,6 +12,7 @@ RUN go mod download
 COPY main.go seed.go ./
 COPY sql/ ./sql/
 COPY positions.csv ./
+COPY anomaly_area.geojson ./
 
 # Build the application
 RUN go build -o /db-migration main.go seed.go

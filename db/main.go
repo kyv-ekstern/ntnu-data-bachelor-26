@@ -17,6 +17,8 @@ func main() {
 	// Parse command-line flags
 	seedFlag := flag.Bool("seed", false, "Seed the database with synthetic data")
 	reseedFlag := flag.Bool("reseed", false, "Clear all data and reseed the database")
+	geojsonSeedFlag := flag.Bool("geojson-seed", false, "Seed the database with clustered anomalies from GeoJSON area")
+	anomalyLimit := flag.Int("anomaly-limit", 1000000, "Number of anomalies to generate for GeoJSON seeding")
 	flag.Parse()
 
 	// Read configuration from environment variables with defaults
@@ -52,6 +54,24 @@ func main() {
 	}
 
 	fmt.Println("All SQL files executed successfully!")
+
+	// GeoJSON seed mode: clustered anomalier innenfor et geografisk område
+	if *geojsonSeedFlag {
+		if *reseedFlag {
+			fmt.Println("\nClearing all existing data...")
+			if err := clearAllData(db); err != nil {
+				log.Fatalf("Failed to clear data: %v", err)
+			}
+			fmt.Println("All data cleared!")
+		}
+
+		fmt.Printf("\nSeeding database with %d anomalies from GeoJSON area...\n", *anomalyLimit)
+		if err := SeedFromGeoJSONArea(db, *anomalyLimit); err != nil {
+			log.Fatalf("Failed to seed from GeoJSON: %v", err)
+		}
+		fmt.Println("GeoJSON seeding completed successfully!")
+		return
+	}
 
 	// Reseed: clear all data first, then seed
 	if *reseedFlag {

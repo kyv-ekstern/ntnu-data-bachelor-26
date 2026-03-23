@@ -218,6 +218,48 @@ func calculateOffsetCoordinate(r *rand.Rand, sentrum Coordinate, minMeter, maksM
 	}
 }
 
+// haversineNM calculates the great-circle distance in nautical miles between two lat/lon points.
+func haversineNM(lat1, lon1, lat2, lon2 float64) float64 {
+	const earthRadiusNM = 3440.065
+	dLat := (lat2 - lat1) * math.Pi / 180
+	dLon := (lon2 - lon1) * math.Pi / 180
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(lat1*math.Pi/180)*math.Cos(lat2*math.Pi/180)*
+			math.Sin(dLon/2)*math.Sin(dLon/2)
+	return earthRadiusNM * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+}
+
+// calculateSignalStrength returns a synthetic signal strength in [0, 1].
+// The raw value decays linearly from 1.0 (vessel at the base station) to 0.0
+// (400 nautical miles away). Gaussian noise and occasional atmospheric fading
+// events are added to mimic real-world propagation variability.
+func calculateSignalStrength(r *rand.Rand, vesselLat, vesselLon float64, bs BaseStation) float64 {
+	const maxRangeNM = 400.0
+	distNM := haversineNM(vesselLat, vesselLon, bs.Lat, bs.Lon)
+
+	raw := 1.0 - distNM/maxRangeNM
+	if raw < 0 {
+		raw = 0
+	}
+
+	// Continuous Gaussian noise (±~4 %) represents small-scale atmospheric variation.
+	noise := r.NormFloat64() * 0.04
+
+	// ~10 % chance of a stronger fading event (ducting, multipath, absorption).
+	if r.Float64() < 0.10 {
+		noise -= r.Float64() * 0.15
+	}
+
+	result := raw + noise
+	if result < 0 {
+		result = 0
+	}
+	if result > 1 {
+		result = 1
+	}
+	return result
+}
+
 // varyCoordinateSlightly varierer en koordinat med liten tilfeldig forskyvning
 func varyCoordinateSlightly(r *rand.Rand, coord Coordinate) Coordinate {
 	return Coordinate{
@@ -369,12 +411,13 @@ type AnomalyGroupData struct {
 
 // AnomalyData inneholder data for en anomali som skal settes inn
 type AnomalyData struct {
-	Type       string
-	Metadata   string
-	CreatedAt  time.Time
-	MMSI       int64
-	DataSource string
-	SourceID   int64
+	Type           string
+	Metadata       string
+	CreatedAt      time.Time
+	MMSI           int64
+	DataSource     string
+	SourceID       int64
+	SignalStrength float64
 }
 
 // generateAnomalyGroupData genererer data for en anomaligruppe
@@ -406,12 +449,13 @@ func generateAnomalies(r *rand.Rand, gruppeData AnomalyGroupData, antall int, an
 		}
 
 		anomalier[i] = AnomalyData{
-			Type:       selectRandomFromList(r, anomalyTypes),
-			Metadata:   metadata,
-			CreatedAt:  createdAt,
-			MMSI:       gruppeData.MMSI,
-			DataSource: "SYNTHETIC",
-			SourceID:   baseStation.ID,
+			Type:           selectRandomFromList(r, anomalyTypes),
+			Metadata:       metadata,
+			CreatedAt:      createdAt,
+			MMSI:           gruppeData.MMSI,
+			DataSource:     "SYNTHETIC",
+			SourceID:       baseStation.ID,
+			SignalStrength: calculateSignalStrength(r, forskjovetKoord.Lat, forskjovetKoord.Lon, baseStation),
 		}
 	}
 
@@ -437,9 +481,9 @@ func insertAnomalyGroup(db *sql.DB, data AnomalyGroupData) (int64, error) {
 // insertAnomaly setter inn en anomali i databasen
 func insertAnomaly(db *sql.DB, data AnomalyData, groupID int64) error {
 	_, err := db.Exec(`
-		INSERT INTO anomalies (type, metadata, created_at, mmsi, anomaly_group_id, data_source, source_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, data.Type, data.Metadata, data.CreatedAt, data.MMSI, groupID, data.DataSource, data.SourceID)
+		INSERT INTO anomalies (type, metadata, created_at, mmsi, anomaly_group_id, data_source, source_id, signal_strength)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, data.Type, data.Metadata, data.CreatedAt, data.MMSI, groupID, data.DataSource, data.SourceID, data.SignalStrength)
 
 	if err != nil {
 		return fmt.Errorf("failed to insert anomaly: %w", err)
@@ -914,14 +958,14 @@ func copyInsertAnomalies(tx *sql.Tx, anomalies []anomalyWithGroup) error {
 	}
 
 	stmt, err := tx.Prepare(pq.CopyIn("anomalies",
-		"type", "metadata", "created_at", "mmsi", "anomaly_group_id", "data_source", "source_id",
+		"type", "metadata", "created_at", "mmsi", "anomaly_group_id", "data_source", "source_id", "signal_strength",
 	))
 	if err != nil {
 		return fmt.Errorf("failed to prepare COPY statement: %w", err)
 	}
 
 	for _, a := range anomalies {
-		_, err := stmt.Exec(a.Type, a.Metadata, a.CreatedAt, a.MMSI, a.GroupID, a.DataSource, a.SourceID)
+		_, err := stmt.Exec(a.Type, a.Metadata, a.CreatedAt, a.MMSI, a.GroupID, a.DataSource, a.SourceID, a.SignalStrength)
 		if err != nil {
 			stmt.Close()
 			return fmt.Errorf("failed to write row to COPY buffer: %w", err)
@@ -1123,7 +1167,7 @@ func SeedFromGeoJSONArea(db *sql.DB, totalAnomalies int) error {
 	fmt.Printf("[3/4] Writing %d anomalies (COPY)...\n", totalGenerated)
 
 	anomStmt, err := tx.Prepare(pq.CopyIn("anomalies",
-		"type", "metadata", "created_at", "mmsi", "anomaly_group_id", "data_source", "source_id",
+		"type", "metadata", "created_at", "mmsi", "anomaly_group_id", "data_source", "source_id", "signal_strength",
 	))
 	if err != nil {
 		tx.Rollback()
@@ -1146,6 +1190,8 @@ func SeedFromGeoJSONArea(db *sql.DB, totalAnomalies int) error {
 				return fmt.Errorf("failed to generate metadata: %w", err)
 			}
 
+			signalStrength := calculateSignalStrength(r, forskjovetKoord.Lat, forskjovetKoord.Lon, baseStation)
+
 			_, err = anomStmt.Exec(
 				selectRandomFromList(r, defaultAnomalyTypes),
 				metadata,
@@ -1154,6 +1200,7 @@ func SeedFromGeoJSONArea(db *sql.DB, totalAnomalies int) error {
 				groupID,
 				"SYNTHETIC",
 				baseStation.ID,
+				signalStrength,
 			)
 			if err != nil {
 				anomStmt.Close()

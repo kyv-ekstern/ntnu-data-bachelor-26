@@ -1,4 +1,4 @@
-# AIS Anomaly Detection
+# AIS - Mock data
 
 Prosjekt for å generere mock-data for avvik i AIS-meldinger, for bachelorstudenter ved NTNU 2026.  
 

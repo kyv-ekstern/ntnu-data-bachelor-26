@@ -1,11 +1,6 @@
 # AIS Anomaly Detection
 
-Et prosjekt for deteksjon av anomalier i AIS-data (Automatic Identification System).
-
-## Forutsetninger
-
-- [Docker](https://docs.docker.com/get-docker/) og Docker Compose installert på maskinen
-- Git for å klone prosjektet
+Prosjekt for å generere mock-data for avvik i AIS-meldinger, for bachelorstudenter ved NTNU 2026.  
 
 ## Prosjektstruktur
 

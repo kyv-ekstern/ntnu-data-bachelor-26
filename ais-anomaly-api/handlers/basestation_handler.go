@@ -11,10 +11,10 @@ var baseStations = []models.BaseStation{
 	{ID: 2, Longitude: 5.330307003639547, Latitude: 60.39322039629883, Name: "Bergen"},
 	{ID: 3, Longitude: 5.1027114432339715, Latitude: 61.93677716068194, Name: "Måløy"},
 	{ID: 4, Longitude: 7.730461036485423, Latitude: 63.120549656472605, Name: "Kristiansund"},
-	{ID: 5, Longitude: 0.70068909637888, Latitude: 64.87943932281323, Name: "Rørvik"},
-	{ID: 6, Longitude: 4.06690852740158, Latitude: 67.15671646368756, Name: "Bodø"},
-	{ID: 7, Longitude: 7.67446623704464, Latitude: 69.58646162079535, Name: "Tromsø"},
-	{ID: 8, Longitude: 4.752824449247385, Latitude: 71.08926393052442, Name: "Hjelmsøya"},
+	{ID: 5, Longitude: 11.23969, Latitude: 64.87943932281323, Name: "Rørvik"},
+	{ID: 6, Longitude: 14.40501, Latitude: 67.28, Name: "Bodø"},
+	{ID: 7, Longitude: 18.95508, Latitude: 69.6489, Name: "Tromsø"},
+	{ID: 8, Longitude: 24.752824449247385, Latitude: 71.08926393052442, Name: "Hjelmsøya"},
 }
 
 // BaseStationHandler handles base station-related HTTP requests

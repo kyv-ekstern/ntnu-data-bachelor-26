@@ -7,8 +7,9 @@ import (
 
 // GeoJSON types
 type GeoJSONFeatureCollection struct {
-	Type     string           `json:"type" example:"FeatureCollection"`
-	Features []GeoJSONFeature `json:"features"`
+	Type       string                 `json:"type" example:"FeatureCollection"`
+	Properties map[string]interface{} `json:"properties,omitempty" swaggertype:"object"`
+	Features   []GeoJSONFeature       `json:"features"`
 }
 
 type GeoJSONFeature struct {

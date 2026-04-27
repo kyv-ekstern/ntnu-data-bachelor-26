@@ -183,6 +183,25 @@ func selectRandomFromList(r *rand.Rand, liste []string) string {
 	return liste[r.Intn(len(liste))]
 }
 
+// satelliteSourceID brukes som sourceId når datakilden er AIS_SATELLITE
+const satelliteSourceID int64 = 9
+
+// selectDataSourceAndSourceIDInt velger en tilfeldig datakilde og returnerer tilhørende sourceId
+// som int64. For AIS_SATELLITE brukes satelliteSourceID istedenfor basestasjons-ID.
+func selectDataSourceAndSourceIDInt(r *rand.Rand, baseStationID int64) (string, int64) {
+	ds := selectRandomFromList(r, dataSources)
+	if ds == "AIS_SATELLITE" {
+		return ds, satelliteSourceID
+	}
+	return ds, baseStationID
+}
+
+// selectDataSourceAndSourceID returnerer datakilde og sourceId som streng for bruk i JSON-metadata.
+func selectDataSourceAndSourceID(r *rand.Rand, baseStationID int64) (string, string) {
+	ds, id := selectDataSourceAndSourceIDInt(r, baseStationID)
+	return ds, fmt.Sprintf("%d", id)
+}
+
 // generateRandomVesselName genererer et tilfeldig skipsnavn med prefiks
 func generateRandomVesselName(r *rand.Rand) string {
 	prefiks := selectRandomFromList(r, vesselPrefixes)
@@ -270,13 +289,14 @@ func varyCoordinateSlightly(r *rand.Rand, coord Coordinate) Coordinate {
 
 // generatePositionReport genererer en enkelt posisjonsrapport
 func generatePositionReport(r *rand.Rand, mmsi int64, coord Coordinate, tidspunkt time.Time, sourceID int64) PositionReport {
+	dataSource, sourceIDStr := selectDataSourceAndSourceID(r, sourceID)
 	return PositionReport{
 		MMSI:              mmsi,
 		MessageType:       r.Intn(3) + 1, // Meldingstype 1, 2 eller 3
 		Key:               fmt.Sprintf("%d-%s", mmsi, tidspunkt.Format("20060102150405")),
 		Timestamp:         tidspunkt.Format(time.RFC3339),
-		DataSource:        selectRandomFromList(r, dataSources),
-		SourceID:          fmt.Sprintf("%d", sourceID),
+		DataSource:        dataSource,
+		SourceID:          sourceIDStr,
 		Latitude:          coord.Lat,
 		Longitude:         coord.Lon,
 		SpeedOverGround:   r.Float64() * 25.0,       // 0-25 knop
@@ -304,6 +324,7 @@ func generatePositionReports(r *rand.Rand, mmsi int64, coord Coordinate, tidspun
 
 // generateStaticReport genererer statisk skipsinformasjon
 func generateStaticReport(r *rand.Rand, mmsi int64, tidspunkt time.Time, sourceID int64) StaticReport {
+	dataSource, sourceIDStr := selectDataSourceAndSourceID(r, sourceID)
 	return StaticReport{
 		CallSign:        generateRandomCallSign(r),
 		Destination:     selectRandomFromList(r, destinations),
@@ -311,10 +332,10 @@ func generateStaticReport(r *rand.Rand, mmsi int64, tidspunkt time.Time, sourceI
 		MMSI:            mmsi,
 		ShipLength:      r.Intn(300) + 20, // 20-320 meter
 		ShipType:        r.Intn(100),
-		SourceID:        fmt.Sprintf("%d", sourceID),
+		SourceID:        sourceIDStr,
 		TimestampSender: tidspunkt.Format(time.RFC3339),
 		VesselName:      generateRandomVesselName(r),
-		DataSource:      selectRandomFromList(r, dataSources),
+		DataSource:      dataSource,
 	}
 }
 
@@ -448,13 +469,14 @@ func generateAnomalies(r *rand.Rand, gruppeData AnomalyGroupData, antall int, an
 			return nil, fmt.Errorf("failed to generate metadata: %w", err)
 		}
 
+		dataSource, sourceID := selectDataSourceAndSourceIDInt(r, baseStation.ID)
 		anomalier[i] = AnomalyData{
 			Type:           selectRandomFromList(r, anomalyTypes),
 			Metadata:       metadata,
 			CreatedAt:      createdAt,
 			MMSI:           gruppeData.MMSI,
-			DataSource:     "SYNTHETIC",
-			SourceID:       baseStation.ID,
+			DataSource:     dataSource,
+			SourceID:       sourceID,
 			SignalStrength: calculateSignalStrength(r, forskjovetKoord.Lat, forskjovetKoord.Lon, baseStation),
 		}
 	}
@@ -1198,7 +1220,7 @@ func SeedFromGeoJSONArea(db *sql.DB, totalAnomalies int) error {
 				createdAt,
 				g.MMSI,
 				groupID,
-				"SYNTHETIC",
+				selectRandomFromList(r, dataSources),
 				baseStation.ID,
 				signalStrength,
 			)
